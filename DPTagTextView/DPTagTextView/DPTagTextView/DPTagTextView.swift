@@ -67,14 +67,12 @@ open class DPTagTextView: UITextView {
     }()
 
     open var mentionTagTextAttributes: [NSAttributedString.Key: Any] = {
-        [NSAttributedString.Key.foregroundColor: UIColor.blue,
-         NSAttributedString.Key.backgroundColor: UIColor.lightGray,
+        [NSAttributedString.Key.foregroundColor: UIColor.purple,
          NSAttributedString.Key.font: UIFont.boldSystemFont(ofSize: 15)]
     }()
     
     open var hashTagTextAttributes: [NSAttributedString.Key: Any] = {
-        [NSAttributedString.Key.foregroundColor: UIColor.red,
-         NSAttributedString.Key.backgroundColor: UIColor.lightGray,
+        [NSAttributedString.Key.foregroundColor: UIColor.orange,
          NSAttributedString.Key.font: UIFont.boldSystemFont(ofSize: 15)]
     }()
     
@@ -113,7 +111,7 @@ public extension DPTagTextView {
         guard let allText = (allText == nil ? text : allText) else { return }
         
         let origin = (allText as NSString).substring(with: range)
-        let tag = isHashTag ? hashTagSymbol.appending(tagText) : tagText
+        let tag = isHashTag ? hashTagSymbol.appending(tagText) : mentionSymbol.appending(tagText)
         let replace = isAppendSpace ? tag.appending(" ") : tag
         let changed = (allText as NSString).replacingCharacters(in: range, with: replace)
         let tagRange = NSMakeRange(range.location, tag.utf16.count)
@@ -239,7 +237,7 @@ private extension DPTagTextView {
             characters.append(char)
         }
         
-        guard tagable else {
+        guard tagable, !isHashTag else {
             currentTaggingRange = nil
             currentTaggingText = nil
             return
@@ -251,6 +249,7 @@ private extension DPTagTextView {
     }
     
     func updateAttributeText(selectedLocation: Int) {
+        guard let text = text else { return }
         if text.isEmpty { arrTags.removeAll() }
         let attributedString = NSMutableAttributedString(string: text)
         attributedString.addAttributes(textViewAttributes, range: NSMakeRange(0, text.utf16.count))
@@ -261,9 +260,15 @@ private extension DPTagTextView {
             }
             attributedString.addAttributes(customTextAttributes, range: dpTag.range)
         }
-        
+        // find hashtags
+        let hashtags = text.findHashtags()
+        hashtags.forEach {
+            if $0.0 != hashTagSymbol {
+                attributedString.addAttributes(hashTagTextAttributes, range: $0.1)
+            }
+        }
         attributedText = attributedString
-        if selectedLocation > 0 { selectedRange = NSMakeRange(selectedLocation, 0) }
+        selectedRange = NSMakeRange(selectedLocation, 0)
     }
     
     func updateArrTags(range: NSRange, textCount: Int) {
@@ -330,6 +335,37 @@ extension DPTagTextView: UITextViewDelegate {
     }
     
     public func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        if currentTaggingText != nil, text == "" {
+            // check tag in list. if in list, we will replace mention or hashtag and remove from list
+            if let currentTag = arrTags.first(where: { $0.range.location < range.location && $0.range.location + $0.range.length > range.location
+               }) {
+                let currentText = textView.text ?? ""
+                arrTags.removeAll {
+                    $0.range.location < range.location && $0.range.location + $0.range.length > range.location
+                }
+                let result = (currentText as NSString).replacingCharacters(in: currentTag.range, with: " ")
+                textView.text = result
+                self.currentTaggingText = nil
+                currentTaggingRange = nil
+                selectedRange = NSRange(location: currentTag.range.location, length: 1)
+                updateArrTags(range: currentTag.range, textCount: text.utf16.count)
+                return true
+            }
+        }
+        // when add character to current tag, remove current tag
+        if currentTaggingText != nil, text != "" {
+            // check tag in list. if in list, we will replace mention or hashtag and remove from list
+            if arrTags.first(where: { $0.range.location < range.location && $0.range.location + $0.range.length > range.location
+            }) != nil {
+                arrTags.removeAll {
+                    $0.range.location < range.location && $0.range.location + $0.range.length > range.location
+                }
+                self.currentTaggingText = nil
+                currentTaggingRange = nil
+                updateArrTags(range: range, textCount: text.utf16.count)
+                return true
+            }
+        }
         addHashTagWithSpace(text, range)
         updateArrTags(range: range, textCount: text.utf16.count)
         return dpTagDelegate?.textView(self, shouldChangeTextIn: range, replacementText: text) ?? true
@@ -376,6 +412,19 @@ internal extension String {
                 String(sub[sub.startIndex ..< endRange])
             }
         }
+    }
+    
+    func findHashtags() -> [(String, NSRange)] {
+        var hashtags:[(String, NSRange)] = []
+        let regex = try? NSRegularExpression(pattern: "(#[a-zA-Z0-9_\\p{Arabic}\\p{N}]*)", options: [])
+        if let matches = regex?.matches(in: self, options:[], range:NSMakeRange(0, self.count)) {
+            for match in matches {
+                let range = NSRange(location:match.range.location, length: match.range.length)
+                let tag = NSString(string: self).substring(with: range)
+                hashtags.append((tag, range))
+            }
+        }
+        return hashtags
     }
 }
 

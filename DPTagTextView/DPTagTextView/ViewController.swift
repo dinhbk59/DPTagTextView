@@ -16,7 +16,7 @@ class ViewController: UIViewController {
     @IBOutlet weak var switchTagDetection: UISwitch!
     
     let isTagDetection = true
-    let arrUsers : [String] = ["Datt Patel", "Dharmesh Shah","Arpit Dhamane","Nirzar Gandhi","Pooja Shah","Nilomi Shah","Pradip Rathod","Jiten Goswami"]
+    let arrUsers : [String] = ["Datt", "Dharmesh","Arpit","Nirzar","Pooja","Nilomi","Pradip","Jiten"]
     let arrHashTag : [String] = ["random", "memes", "meme", "love", "photography", "art", "humor", "like", "follow", "funny", "photooftheday", "awesome"]
     var arrSearchUsers = [String]()
     
@@ -53,13 +53,13 @@ class ViewController: UIViewController {
 extension ViewController : DPTagTextViewDelegate {
     
     func dpTagTextView(_ textView: DPTagTextView, didChangedTagSearchString strSearch: String, isHashTag: Bool) {
-        
+        guard !isHashTag else { return }
         if (strSearch.count == 0) {
             tbl.isHidden = true
         } else {
             tbl.isHidden = false
         }
-        print(strSearch)
+        print("search metioned user with text: \(strSearch)")
         arrSearchUsers = (isHashTag ? arrHashTag : arrUsers).filter({ (str) -> Bool in
             return str.lowercased().contains(strSearch.lowercased())
         })
