@@ -307,7 +307,6 @@ private extension DPTagTextView {
                 matched.append(tag)
             }
             
-
         }
         if self.marketText != nil {
             updateTypingAttributes()
@@ -391,25 +390,25 @@ extension DPTagTextView: UITextViewDelegate {
     }
     
     public func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        if currentTaggingText != nil, text == "" {
+        if text == "" {
             // check tag in list. if in list, we will replace mention or hashtag and remove from list
-            if let currentTag = arrTags.first(where: { $0.range.location < range.location && $0.range.location + $0.range.length > range.location
+            if let currentTag = arrTags.first(where: { $0.range.location <= range.location && $0.range.location + $0.range.length > range.location
                }) {
                 let currentText = textView.text ?? ""
                 arrTags.removeAll {
-                    $0.range.location < range.location && $0.range.location + $0.range.length > range.location
+                    $0.range.location <= range.location && $0.range.location + $0.range.length > range.location
                 }
                 let result = (currentText as NSString).replacingCharacters(in: currentTag.range, with: " ")
                 textView.text = result
                 self.currentTaggingText = nil
                 currentTaggingRange = nil
-                selectedRange = NSRange(location: currentTag.range.location, length: 1)
+                selectedRange = NSRange(location: currentTag.range.location + 1, length: 0)
                 updateArrTags(range: currentTag.range, textCount: text.utf16.count)
                 return true
             }
         }
         // when add character to current tag, remove current tag
-        if currentTaggingText != nil, text != "" {
+        if text != "" {
             // check tag in list. if in list, we will replace mention or hashtag and remove from list
             if arrTags.first(where: { $0.range.location < range.location && $0.range.location + $0.range.length > range.location
             }) != nil {
@@ -473,6 +472,19 @@ internal extension String {
     func findHashtags() -> [(String, NSRange)] {
         var hashtags:[(String, NSRange)] = []
         let regex = try? NSRegularExpression(pattern: "(#[a-zA-Z0-9_\\p{Arabic}\\p{N}]*)", options: [])
+        if let matches = regex?.matches(in: self, options:[], range:NSMakeRange(0, self.count)) {
+            for match in matches {
+                let range = NSRange(location:match.range.location, length: match.range.length)
+                let tag = NSString(string: self).substring(with: range)
+                hashtags.append((tag, range))
+            }
+        }
+        return hashtags
+    }
+    
+    func findMentions() -> [(String, NSRange)] {
+        var hashtags:[(String, NSRange)] = []
+        let regex = try? NSRegularExpression(pattern: "(@[^\\s\\K]+)", options: [])
         if let matches = regex?.matches(in: self, options:[], range:NSMakeRange(0, self.count)) {
             for match in matches {
                 let range = NSRange(location:match.range.location, length: match.range.length)
