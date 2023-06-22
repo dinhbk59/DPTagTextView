@@ -271,20 +271,75 @@ private extension DPTagTextView {
         selectedRange = NSMakeRange(selectedLocation, 0)
     }
     
-    func updateArrTags(range: NSRange, textCount: Int) {
-        arrTags = arrTags.filter({ (dpTag) -> Bool in
-            if dpTag.range.location < range.location && range.location < dpTag.range.location+dpTag.range.length {
-                dpTagDelegate?.dpTagTextView(self, didRemoveTag: dpTag)
-                return false
+    var marketText: String? {
+        if let marketRange = self.markedTextRange {
+            return self.text(in: marketRange)
+        }
+        return nil
+    }
+    
+    func fixedWhenMarketTextUnmatch() {
+        var matched: [DPTag] = []
+        for i in 0 ..< arrTags.count {
+            var tag = arrTags[i]
+            if let last = matched.last(where: { t in
+                return t.name == tag.name
+            }) {
+                let text = (self.text as NSString).substring(from: last.range.location + last.range.length)
+                let tagName = tag.isHashTag ? hashTagSymbol.appending(tag.name) : mentionSymbol.appending(tag.name)
+                let range = (text as NSString).range(of: tagName)
+                if range.length > 0 {
+                    tag.range = NSRange(location: range.location + last.range.location + last.range.length, length: range.length)
+                } else {
+                    tag.range = NSRange(location: 0, length: 0)
+                }
+                arrTags[i] = tag
+                matched.append(tag)
+            } else {
+                let tagName = tag.isHashTag ? hashTagSymbol.appending(tag.name) : mentionSymbol.appending(tag.name)
+                let range = (self.text as NSString).range(of: tagName)
+                if range.length > 0 {
+                    tag.range = range
+                } else {
+                    tag.range = NSRange(location: 0, length: 0)
+                }
+                arrTags[i] = tag
+                matched.append(tag)
             }
-            if range.length > 0 {
-                if range.location <= dpTag.range.location && dpTag.range.location < range.location+range.length {
+            
+
+        }
+        if self.marketText != nil {
+            updateTypingAttributes()
+        }
+    }
+    
+    func updateTypingAttributes() {
+        var attri = textViewAttributes
+        attri[.backgroundColor] = UIColor.black.withAlphaComponent(0.1)
+        self.typingAttributes = attri
+    }
+    
+    func updateArrTags(range: NSRange, textCount: Int) {
+        let marketText = self.marketText ?? ""
+       
+        if marketText.isEmpty == false {
+            updateTypingAttributes()
+        } else {
+            arrTags = arrTags.filter({ (dpTag) -> Bool in
+                if dpTag.range.location < range.location && range.location < dpTag.range.location+dpTag.range.length {
                     dpTagDelegate?.dpTagTextView(self, didRemoveTag: dpTag)
                     return false
                 }
-            }
-            return true
-        })
+                if range.length > 0 {
+                    if range.location <= dpTag.range.location && dpTag.range.location < range.location+range.length {
+                        dpTagDelegate?.dpTagTextView(self, didRemoveTag: dpTag)
+                        return false
+                    }
+                }
+                return true
+            })
+        }
         
         for i in 0 ..< arrTags.count {
             var location = arrTags[i].range.location
@@ -331,6 +386,7 @@ extension DPTagTextView: UITextViewDelegate {
     
     public func textViewDidChangeSelection(_ textView: UITextView) {
         tagging(textView: textView)
+        fixedWhenMarketTextUnmatch()
         dpTagDelegate?.textViewDidChangeSelection(self)
     }
     
@@ -366,7 +422,7 @@ extension DPTagTextView: UITextViewDelegate {
                 return true
             }
         }
-        addHashTagWithSpace(text, range)
+//        addHashTagWithSpace(text, range)
         updateArrTags(range: range, textCount: text.utf16.count)
         return dpTagDelegate?.textView(self, shouldChangeTextIn: range, replacementText: text) ?? true
     }
