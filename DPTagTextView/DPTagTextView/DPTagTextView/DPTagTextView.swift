@@ -399,7 +399,9 @@ extension DPTagTextView: UITextViewDelegate {
                     $0.range.location <= range.location && $0.range.location + $0.range.length > range.location
                 }
                 let result = (currentText as NSString).replacingCharacters(in: currentTag.range, with: " ")
-                textView.text = result
+                let attributedString = NSMutableAttributedString(string: result)
+                attributedString.addAttributes(textViewAttributes, range: NSMakeRange(0, result.utf16.count))
+                textView.attributedText = attributedString
                 self.currentTaggingText = nil
                 currentTaggingRange = nil
                 selectedRange = NSRange(location: currentTag.range.location + 1, length: 0)
