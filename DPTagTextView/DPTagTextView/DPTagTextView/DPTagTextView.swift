@@ -271,75 +271,29 @@ private extension DPTagTextView {
         selectedRange = NSMakeRange(selectedLocation, 0)
     }
     
-    var marketText: String? {
-        if let marketRange = self.markedTextRange {
-            return self.text(in: marketRange)
-        }
-        return nil
-    }
-    
     func fixedWhenMarketTextUnmatch() {
-        var matched: [DPTag] = []
-        for i in 0 ..< arrTags.count {
-            var tag = arrTags[i]
-            if let last = matched.last(where: { t in
-                return t.name == tag.name
+        guard let text = text else { return }
+        var result: [DPTag] = []
+        let mentions = text.findMentions()
+        var sortedMentions = mentions.sorted {
+            $0.1.location < $1.1.location
+        }
+        while !sortedMentions.isEmpty {
+            let mention = sortedMentions[0]
+            if let firstIndex = arrTags.firstIndex(where: { [mention] in
+                return mention.0 == mentionSymbol.appending($0.name)
             }) {
-                let text = (self.text as NSString).substring(from: last.range.location + last.range.length)
-                let tagName = tag.isHashTag ? hashTagSymbol.appending(tag.name) : mentionSymbol.appending(tag.name)
-                let range = (text as NSString).range(of: tagName)
-                if range.length > 0 {
-                    tag.range = NSRange(location: range.location + last.range.location + last.range.length, length: range.length)
-                } else {
-                    tag.range = NSRange(location: 0, length: 0)
-                }
-                arrTags[i] = tag
-                matched.append(tag)
-            } else {
-                let tagName = tag.isHashTag ? hashTagSymbol.appending(tag.name) : mentionSymbol.appending(tag.name)
-                let range = (self.text as NSString).range(of: tagName)
-                if range.length > 0 {
-                    tag.range = range
-                } else {
-                    tag.range = NSRange(location: 0, length: 0)
-                }
-                arrTags[i] = tag
-                matched.append(tag)
+                let first = arrTags[firstIndex]
+                let newTag = DPTag(name: first.name, range: mention.1)
+                result.append(newTag)
+                arrTags.remove(at: firstIndex)
             }
-            
+            sortedMentions.remove(at: 0)
         }
-        if self.marketText != nil {
-            updateTypingAttributes()
-        }
-    }
-    
-    func updateTypingAttributes() {
-        var attri = textViewAttributes
-        attri[.backgroundColor] = UIColor.black.withAlphaComponent(0.1)
-        self.typingAttributes = attri
+        arrTags = result
     }
     
     func updateArrTags(range: NSRange, textCount: Int) {
-        let marketText = self.marketText ?? ""
-       
-        if marketText.isEmpty == false {
-            updateTypingAttributes()
-        } else {
-            arrTags = arrTags.filter({ (dpTag) -> Bool in
-                if dpTag.range.location < range.location && range.location < dpTag.range.location+dpTag.range.length {
-                    dpTagDelegate?.dpTagTextView(self, didRemoveTag: dpTag)
-                    return false
-                }
-                if range.length > 0 {
-                    if range.location <= dpTag.range.location && dpTag.range.location < range.location+range.length {
-                        dpTagDelegate?.dpTagTextView(self, didRemoveTag: dpTag)
-                        return false
-                    }
-                }
-                return true
-            })
-        }
-        
         for i in 0 ..< arrTags.count {
             var location = arrTags[i].range.location
             let length = arrTags[i].range.length
@@ -486,7 +440,7 @@ internal extension String {
     
     func findMentions() -> [(String, NSRange)] {
         var hashtags:[(String, NSRange)] = []
-        let regex = try? NSRegularExpression(pattern: "(@[^\\s\\K]+)", options: [])
+        let regex = try? NSRegularExpression(pattern: "@[\\p{L}0-9_.]*", options: [])
         if let matches = regex?.matches(in: self, options:[], range:NSMakeRange(0, self.count)) {
             for match in matches {
                 let range = NSRange(location:match.range.location, length: match.range.length)
